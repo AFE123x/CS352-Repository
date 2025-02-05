@@ -58,9 +58,14 @@ if __name__ == "__main__":
     t1 = threading.Thread(name='server', target=server)
     t1.start()
 
-    time.sleep(random.random() * 5)
+    #time.sleep(random.random() * 5)
     t2 = threading.Thread(name='client', target=client)
     t2.start()
 
-    time.sleep(5)
+    #time.sleep(5)
     print("Done.")
+
+    # After removing the sleep statements the program throws an error after rerunning twice 
+    # The error is thrown because without the sleep statements the server is closed before the client can connect to it
+    # The client thread attempts to connect to the server before the server has finished setting up and
+    # started listening for connections.
