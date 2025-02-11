@@ -58,11 +58,12 @@ if __name__ == "__main__":
     t1 = threading.Thread(name='server', target=server)
     t1.start()
 
-    time.sleep(random.random() * 5)
+    # time.sleep(random.random() * 5)
     t2 = threading.Thread(name='client', target=client)
     t2.start()
 
-    time.sleep(5)
+    # time.sleep(5)
+    t2.join()
     print("Done.")
 
 # After removing the sleep statements the program throws an error after rerunning twice 
