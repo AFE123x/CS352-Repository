@@ -7,104 +7,107 @@ import socket
 import socket
 import time
 
-def wait_for_port(port, host='localhost', check_interval=1):
-    """Wait for a port to become available."""
-    while True:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            if sock.connect_ex((host, port)) != 0:
-                return
-        time.sleep(check_interval)
+import socket
+import time
+def is_port_in_use(port_num):
+    """
+    Check if a port is in use by attempting to bind to it.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('localhost', port_num))
+            return False  # Port is not in use
+        except OSError:
+            return True  # Port is in use
 
-def server(output_file, port=50007):
-    wait_for_port(port)
+def wait_for_port(port_num, timeout=30, interval=1):
+    """
+    Wait until a port is no longer in use.
+    
+    :param port_num: The port number to check.
+    :param timeout: Maximum time to wait (in seconds).
+    :param interval: Time to wait between checks (in seconds).
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if not is_port_in_use(port_num):
+            return True
+        print(f"Port {port_num} is still in use. Waiting...")
+        time.sleep(interval)
+    print(f"Timeout: Port {port_num} is still in use after {timeout} seconds.")
+    return False
 
+def server():
+    wait_for_port(50007)
     try:
         ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ss.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Allow reuse of port
         print("[S]: Server socket created")
     except socket.error as err:
-        print(f"Socket open error: {err}\n")
+        print('socket open error: {}\n'.format(err))
         exit()
 
-    while True:  # Retry binding until it succeeds
-        try:
-            ss.bind(('', port))
-            break  # If binding succeeds, exit the loop
-        except socket.error as err:
-            print(f"[S]: Port {port} is in use, retrying in 1 second...")
-            time.sleep(1)
-
+    server_binding = ('', 50007)
+    ss.bind(server_binding)
     ss.listen(1)
-    print(f"[S]: Server listening on port {port}")
-
+    host = socket.gethostname()
+    print("[S]: Server host name is {}".format(host))
+    localhost_ip = (socket.gethostbyname(host))
+    print("[S]: Server IP address is {}".format(localhost_ip))
     csockid, addr = ss.accept()
-    print(f"[S]: Got a connection request from a client at {addr}")
+    print ("[S]: Got a connection request from a client at {}".format(addr))
+    while True:
+        data_from_client = csockid.recv(2000)
+        if not data_from_client:
+            break
+        string_to_rev = data_from_client.decode('utf-8')
+        string_to_rev = string_to_rev[::-1]
+        string_to_rev = string_to_rev.swapcase()
+        csockid.send(string_to_rev.encode('utf-8'))
 
-    # Receive data from the client
-    data = csockid.recv(4096)
-    msg = data.decode('utf-8')
+    msg = "Welcome to CS 352!"
 
-    # Reverse each line and invert the case, then write to a file
-    with open(output_file, "w", encoding="utf-8") as file:
-        for line in msg.splitlines():
-            reversed_line = line[::-1]
-            reversed_and_case_inverted = reversed_line.swapcase()
-            file.write(reversed_and_case_inverted + "\n")
-            print("[S]: Processed Line:", reversed_and_case_inverted)
-
-    print(f"[S]: Processed content saved to {output_file}")
-
-    # Send acknowledgment to client
-    csockid.sendall(b"Received file data successfully")
-
-    csockid.close()
+    # Close the server socket
     ss.close()
+    exit()
 
 
 
-def client(input_file):
+def client(input_file,output_file):
     try:
         cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print("[C]: Client socket created")
     except socket.error as err:
-        print('Socket open error: {} \n'.format(err))
+        print('socket open error: {} \n'.format(err))
         exit()
         
     port = 50007
     localhost_addr = socket.gethostbyname(socket.gethostname())
 
-    # Retry connection until the server is ready
-    while True:
-        try:
-            cs.connect((localhost_addr, port))
-            break
-        except ConnectionRefusedError:
-            print("[C]: Connection refused, retrying...")
-            time.sleep(0.5)
-
-    # Read and send file
-    with open(input_file, "rb") as file:
-        file_data = file.read()
-        cs.sendall(file_data)
-
-    # Receive server confirmation
-    data_from_server = cs.recv(1024)
-    print("[C]: Data received from server: {}".format(data_from_server.decode('utf-8')))
-
+    # connect to the server on local machine
+    server_binding = (localhost_addr, port)
+    cs.connect(server_binding)
+    with open(input_file,"r") as file:
+        with open(output_file,"w") as output:
+            for line in file:
+                cs.send(line.encode('utf-8'))
+                line = line.strip('\n')
+                data_from_server=cs.recv(2000)
+                print(f"[C]: Data received from server: {data_from_server.strip().decode('utf-8')}")
+                output.write(f"{data_from_server.decode('utf-8').strip()}\n")
     cs.close()
+    exit()
 
 def test_server(test_num,input_file, output_file, expected_file):
-    t1 = threading.Thread(name='server', target=server, args=(output_file,))
-    t2 = threading.Thread(name='client', target=client, args=(input_file,))
+    t1 = threading.Thread(name='server', target=server)
+    t2 = threading.Thread(name='client', target=client, args=(input_file,output_file))
 
     t1.start()
-    time.sleep(1)  # Allow server to start
+    time.sleep(1)
     t2.start()
 
     t1.join()
     t2.join()
 
-    # Compare output with expected file
     diff = subprocess.run(['diff', output_file, expected_file], capture_output=True)
     if diff.returncode != 0:
         print(f"Test {test_num} failed: {output_file} differs from {expected_file}")
@@ -115,3 +118,4 @@ def test_server(test_num,input_file, output_file, expected_file):
 if __name__ == "__main__":
     test_server(1,"test1.txt", "test1o.txt", "test1.out")
     test_server(2,"in-proj.txt", "out-proj.txt", "out-proj.out")
+    test_server(3,"test2.txt", "out-test2.txt", "test2.out")

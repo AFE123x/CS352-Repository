@@ -47,7 +47,7 @@ def server():
     csockid, addr = ss.accept()
     print ("[S]: Got a connection request from a client at {}".format(addr))
     while True:
-        data_from_client = csockid.recv(200)
+        data_from_client = csockid.recv(2000)
         if not data_from_client:
             break
         string_to_rev = data_from_client.decode('utf-8')
