@@ -16,13 +16,10 @@ def client():
     server_binding = (localhost_addr, port)
     cs.connect(server_binding)
     with open("in-proj.txt","r") as file:
-        with open("out-proj.txt","w") as output:
-            for line in file:
-                cs.send(line.encode('utf-8'))
-                line = line.strip('\n')
-                data_from_server=cs.recv(2000)
-                print(f"[C]: Data received from server: {data_from_server.strip().decode('utf-8')}")
-                output.write(f"{data_from_server.decode('utf-8').strip()}\n")
+        for line in file:
+            cs.send(line.encode('utf-8'))
+            data_from_server=cs.recv(2000)
+            print(f"[C]: Data received from server: {data_from_server.strip().decode('utf-8')}")
     # Receive data from the server
 
     # close the client socket

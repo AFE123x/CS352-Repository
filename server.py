@@ -46,14 +46,17 @@ def server():
     print("[S]: Server IP address is {}".format(localhost_ip))
     csockid, addr = ss.accept()
     print ("[S]: Got a connection request from a client at {}".format(addr))
-    while True:
-        data_from_client = csockid.recv(2000)
-        if not data_from_client:
-            break
-        string_to_rev = data_from_client.decode('utf-8')
-        string_to_rev = string_to_rev[::-1]
-        string_to_rev = string_to_rev.swapcase()
-        csockid.send(string_to_rev.encode('utf-8'))
+    with open("out-proj.txt","w") as output:
+        while True:
+            data_from_client = csockid.recv(2000)
+            if not data_from_client:
+                break
+            string_to_rev = data_from_client.decode('utf-8')
+            string_to_rev = string_to_rev.strip('\n')
+            string_to_rev = string_to_rev[::-1]
+            string_to_rev = string_to_rev.swapcase()
+            output.write(f"{string_to_rev}\n") 
+            csockid.send(string_to_rev.encode('utf-8'))
 
     msg = "Welcome to CS 352!"
 

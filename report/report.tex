@@ -1,0 +1,65 @@
+\documentclass{article}
+
+\begin{document}
+\title{CS352 - Project 1 Report}
+\author{Arun Felix and Bhavya Patel}
+\maketitle
+
+\section{Team Details}
+
+\begin{center}
+    \begin{itemize}
+        \item Arun Felix (netid: ajf277)
+        \item Bhavya Patel (netid: bsp75)
+    \end{itemize}    
+\end{center}
+
+\section{Collaboration}
+
+We used the Python documentation, and Bhavya focused on the first half. I did the last half and developed testcases.
+
+\section{Observations after step 2}
+
+In step two, we removed the time.sleep(5) statement. Notice that the program will not behave consistently. 
+
+\begin{itemize}
+    \item First, multithreading is inconsistent, and the behavior of multithreaded programs is inconsistent.
+    \begin{itemize}
+        \item The main function can finish before the threads finish.
+        \item We can fix this using the join function, so ensure the program stops only after the client and server threads are complete.
+    \end{itemize}
+    \item Second, the server might not be able to bind to a particular port number since it takes time to free the port number.
+    \begin{itemize}
+        \item This is after running the program consistently.
+    \end{itemize}
+\end{itemize}
+
+\section{Difficulties}
+
+We didn't face any difficulties.
+
+\section{Design decisions}
+
+\begin{itemize}
+    \item Because waiting for the port to free up is cumbersome, we implemented a function for the server to wait until the port becomes available.
+\end{itemize}
+
+\section{Testing}
+\begin{itemize}
+    \item We put all tests in the tests folder.
+    \item We created a tests.py file with the client and server functions. We call the server and client functions with an input file, an output file, and an expected output file.
+    \item We tested a couple of corner cases, like having an empty file, which behaves as intended, giving an empty output file.
+\end{itemize}
+
+\section{What'd we learn?}
+
+\begin{itemize}
+    \item This project helped us understand why we need sockets and what binding and listening do.
+    \begin{itemize}
+        \item Systems Programming taught sockets, but it was slightly complex, requiring us to use multithreading explicitly.
+        \item The Python socket interface provided many abstractions over C's socket interface.
+    \end{itemize}
+    \item We also learned about the netstat utility on UNIX systems.
+\end{itemize}
+
+\end{document}
