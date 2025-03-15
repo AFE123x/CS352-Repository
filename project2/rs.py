@@ -1,160 +1,149 @@
 import socket
 import sys
-import os
 
-def parse_rsdatabase(filename):
-    """Parse the root server database file."""
-    tld_to_ts = {}
-    domain_to_ip = {}
-    
-    try:
-        with open(filename, 'r') as file:
-            # First two lines contain TLD mappings
-            tld_com = file.readline().strip().split()
-            tld_edu = file.readline().strip().split()
-            
-            if len(tld_com) >= 2:
-                tld_to_ts[tld_com[0]] = tld_com[1]  # Map 'com' to TS1 hostname
-            
-            if len(tld_edu) >= 2:
-                tld_to_ts[tld_edu[0]] = tld_edu[1]  # Map 'edu' to TS2 hostname
-            
-            # Remaining lines contain domain to IP mappings
-            for line in file:
-                parts = line.strip().split()
-                if len(parts) >= 2:
-                    domain_to_ip[parts[0].lower()] = (parts[0], parts[1])  # Store original case and IP
-    except FileNotFoundError:
-        print(f"Error: Database file {filename} not found.")
-        sys.exit(1)
-    
-    return tld_to_ts, domain_to_ip
+domain_map = {}
 
-def get_tld(domain):
-    """Extract the top-level domain from a domain name."""
-    parts = domain.lower().split('.')
-    if len(parts) >= 2:
-        return parts[-1]  # Return the last part as TLD
-    return None
+ts1_server = []
+ts2_server = []
 
-def process_request(request, tld_to_ts, domain_to_ip):
-    """Process an RU-DNS request and generate a response."""
-    parts = request.strip().split()
-    
-    # Validate request format
-    if len(parts) != 4 or parts[0] != '0':
-        return None
-    
-    req_type, domain, ident, flag = parts
-    domain_lower = domain.lower()
-    tld = get_tld(domain)
-    
-    # Case 3 & 4: Check if domain is in RS database
-    if domain_lower in domain_to_ip:
-        original_domain, ip = domain_to_ip[domain_lower]
-        return f"1 {original_domain} {ip} {ident} aa"
-    
-    # Case 1 & 2: Check if domain is under one of the managed TLDs
-    if tld in tld_to_ts:
-        ts_hostname = tld_to_ts[tld]
-        
-        if flag == 'it':  # Iterative query
-            # Case 1: Return the TS hostname to client
-            return f"1 {domain} {ts_hostname} {ident} ns"
-        
-        elif flag == 'rd':  # Recursive query
-            # Case 2: Forward query to appropriate TS
-            try:
-                # Create a socket to connect to the TS
-                ts_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                ts_sock.connect((ts_hostname, ts_port))
-                
-                # Forward the query to TS
-                ts_sock.sendall(request.encode())
-                
-                # Receive response from TS
-                ts_response = ts_sock.recv(1024).decode()
-                ts_sock.close()
-                
-                # Parse TS response and modify flags if necessary
-                ts_parts = ts_response.strip().split()
-                if len(ts_parts) == 5 and ts_parts[0] == '1':
-                    if ts_parts[4] == 'aa':
-                        # Change authoritative (aa) to recursion available (ra)
-                        return f"1 {ts_parts[1]} {ts_parts[2]} {ts_parts[3]} ra"
-                    else:
-                        # For nx flag, relay response as is
-                        return ts_response
-            except Exception as e:
-                print(f"Error forwarding request to TS: {e}")
-                return None
-    
-    # Case 4: Domain not in RS database and not under managed TLDs
-    return f"1 {domain} 0.0.0.0 {ident} nx"
 
-if __name__ == '__main__':
-    # Check command line arguments
-    if len(sys.argv) != 2:
-        print("Usage: python3 rs.py rudns_port")
-        sys.exit(1)
-    
-    # Parse command line arguments
-    try:
-        rs_port = int(sys.argv[1])
-        ts_port = rs_port  # TS servers use the same port
-    except ValueError:
-        print("Error: Port must be an integer")
-        sys.exit(1)
-    
-    # Parse RS database
-    tld_to_ts, domain_to_ip = parse_rsdatabase('rsdatabase.txt')
-    
-    # Create socket
-    try:
-        rs_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        rs_sock.bind(('', rs_port))
-        rs_sock.listen(10)
-        print(f"RS server is listening on port {rs_port}")
-    except Exception as e:
-        print(f"Error creating socket: {e}")
-        sys.exit(1)
-    
-    # Create/open log file
-    log_file = open('rsresponses.txt', 'w')
-    
+def handle_rd(connection,str):
+    # connection.sendall(response.encode())
+    global domain_map
+    global ts1_server
+    global ts2_server
+
+    # read the domain, and check if it's in the dictionary
+    if str[1] not in domain_map:
+        tld = str[1].split('.')[-1]
+        if tld == ts1_server[0]:
+            response = f"1 {str[1]} {ts1_server[1]} {str[2]} ns"
+            connection.sendall(response.encode())
+        elif tld == ts2_server[0]:
+            response = f"1 {str[1]} {ts2_server[1]} {str[2]} ns"
+            connection.sendall(response.encode())
+        else:
+            response = f"1 {str[1]} 0.0.0.0 {str[2]} nx"
+            connection.sendall(response.encode())
+    else:
+        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
+        connection.sendall(response.encode())
+
+def handle_it(connection,str):
+    # connection.sendall(response.encode())
+    global domain_map
+    global ts1_server
+    global ts2_server
+
+    # read the domain, and check if it's in the dictionary
+    if str[1] not in domain_map:
+        tld = str[1].split('.')[-1]
+        if tld == ts1_server[0]:
+            response = f"1 {str[1]} {ts1_server[1]} {str[2]} ns"
+            print("it's com")
+            connection.sendall(response.encode())
+        elif tld == ts2_server[0]:
+            print("it's edu")
+            # 0 www.google.com 5 rd
+            # 1 njit.edu cheese.cs.rutgers.edu 16 ns
+            response = f"1 {str[1]} {ts2_server[1]} {str[2]} ns"
+            connection.sendall(response.encode())
+        else:
+            response = f"1 {str[1]} 0.0.0.0 {str[2]} nx"
+            connection.sendall(response.encode())
+    else:
+        # 0 www.google.com 5 rd
+        # 1 DomainName IPAddress identification flags
+        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
+        connection.sendall(response.encode())
+def main():
+    global ts1_server
+    global ts2_server
+    global domain_app
+    args = sys.argv
+    print(len(args))
+    if len(args) < 2:
+        print("python3 rs.py <port_num>")
+        exit(1)
+
+
+    # initialize the data structure to search for goods!
+    with open('rsdatabase.txt', 'r') as file:
+        # Read the first two lines separately
+        ts1_server = file.readline().strip().split() # server and top heirchachy thing for ts1 server
+        ts2_server = file.readline().strip().split() # server and top heirchachy thing for ts2 server
+        print(ts1_server)
+        print(ts2_server)
+        # Now iterate through the rest of the lines
+        for line in file:
+            line = line.strip().split()
+            if len(line) < 2:
+                print("Failed to read line properly")
+                continue
+            domain_map[line[0]] = line[1]
+    # initialize socket
+    host_name = socket.gethostname() # get's the current host computer!
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # create the TCP/IP Socket
+    server_socket.bind((host_name,int(args[1]))) # Bind the host_name and port number
+    server_socket.listen(1) # we want to wait for one connection
+    connection, client_address = server_socket.accept() # Wait for the connection
+
     try:
         while True:
-            # Accept client connections
-            conn, addr = rs_sock.accept()
-            print(f"Connection from {addr}")
-            
-            try:
-                # Receive data
-                data = conn.recv(1024).decode()
-                if not data:
-                    continue
-                
-                print(f"Received: {data}")
-                
-                # Process request
-                response = process_request(data, tld_to_ts, domain_to_ip)
-                
-                if response:
-                    # Send response
-                    conn.sendall(response.encode())
-                    print(f"Sent: {response}")
-                    
-                    # Log response
-                    log_file.write(f"{response}\n")
-                    log_file.flush()
-            except Exception as e:
-                print(f"Error handling request: {e}")
-            finally:
-                # Close connection
-                conn.close()
-    except KeyboardInterrupt:
-        print("Server shutting down")
+            data = connection.recv(1024)
+            if not data:
+                break
+            str = data.decode()
+            # We can parse the data, and find it in a cool data structure
+            # 0 www.google.com 5 rd
+
+            str = str.strip().split() # sprlit our string into an array
+            if str[3] == "rd":
+                handle_rd(connection,str)
+            elif str[3] == "it":
+                handle_it(connection,str)
+            else:
+                response = f"error occured!"
+                connection.sendall(response.encode())
+                continue
+            # aoeu = "aoeu"
+            # connection.sendall(aoeu.encode())
     finally:
-        # Clean up
-        rs_sock.close()
-        log_file.close()
+        connection.close()
+
+if __name__ == "__main__":
+    main()
+
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢟⣩⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢩⣿⢫⣿⣿⣿⣿⣿⣏⢏⢿⣿⣿⡌⠻⣿⣿⣯⣹⣿⣿⣿⣿⣿⣯⡹⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⡿⢫⣤⣤⡐⢶⣮⣭⢛⣵⣿⣿⣿⣿⣿⣿⢹⣿⣿⣿⠿⠿⢿⣛⣛⣛⣛⣛⣃⣛⡋⠼⢿⣿⣿⣿⣿⣿⡌⡎⢿⣿⣿⡌⢎⠻⣿⣿⣯⡻⣿⣿⣿⣿⣷⡜⣿⣿⣿⣿
+# ⣿⣿⣿⣿⡟⣴⣿⣿⠿⠿⡌⠟⣱⣿⣿⣿⣿⣿⣿⣿⣿⣼⣿⣷⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣭⣙⠻⣿⣷⢸⡜⣿⣿⣿⡜⣷⡙⣿⣿⣿⣮⡻⣿⣿⣿⣿⡜⢿⣿⣿
+# ⣿⣿⣿⡟⠼⣋⣵⣶⡿⢋⢄⡆⣧⣝⡻⠿⠿⣋⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣝⠎⣷⢸⣿⣿⣷⠸⣿⡈⢿⣿⣿⣷⣌⢿⣿⣿⣿⡌⢿⣿
+# ⣿⣿⡿⣰⣾⣿⣿⡟⣱⢏⣾⣧⢻⣿⠟⣡⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣌⠂⣿⣿⣿⡇⣿⡇⢊⢿⣿⣿⣿⣧⡹⣿⣿⣿⡜⣿
+# ⣿⣿⢣⣿⣿⣿⡟⣰⡏⢸⣿⣿⡮⣣⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⣻⣭⣭⣭⣭⣽⣛⡻⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣝⢿⣿⣷⢹⡇⡸⡎⢿⣿⣿⣿⣷⡙⣿⣿⣷⣿
+# ⣿⡟⣼⣿⣿⣿⢡⣿⠀⣾⣿⡟⣱⣿⣿⣿⣿⣿⣿⡿⢻⣿⣿⣿⣿⣿⣿⣻⣿⣿⣛⣛⠿⢷⣮⣝⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡻⣿⢸⡇⡇⣿⡘⣿⣿⣿⣿⣷⡘⠿⣋⣵
+# ⣿⣷⣿⣿⣿⡇⣾⡇⡇⣿⠏⣼⣿⣿⣿⣿⣿⣿⢋⣴⣿⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣮⣝⡻⣮⡻⣿⣿⣿⡙⣿⣿⣿⣿⣿⣿⣷⡙⢸⡇⣧⢻⣧⢹⣿⣿⠿⣋⣵⣾⡿⢏
+# ⣿⣿⣿⣿⣿⢸⣿⢱⡇⡟⣼⣿⣿⣿⣿⣿⡿⢡⣿⡟⣩⣾⣿⡛⢿⣿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣝⠊⠻⣿⣿⣌⢿⣿⣿⣿⣿⣿⣿⡌⢳⣿⢸⣿⡈⢟⣵⣾⣿⠟⢫⢰⢣
+# ⣿⣿⣿⣿⡇⣿⣿⢸⡇⢱⣿⣿⣿⣿⣿⡿⢱⣿⢋⣾⣿⣿⣿⣿⡆⡙⢷⣙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡘⠻⣿⣆⢻⣿⣿⣿⣿⣿⣿⡄⠟⠼⢋⣴⣿⠟⣫⣵⣿⢸⡖⣡
+# ⣿⣿⣿⣿⢰⣿⣿⢸⢇⣿⣿⣿⣿⣿⣿⢡⣿⢣⣾⣿⣿⣿⣿⣿⡇⢹⣤⣙⢷⣝⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡹⣿⣧⢻⣿⣿⣿⣿⣿⣿⡄⢵⣿⠟⣵⣾⣿⣿⢣⡏⢸⣿
+# ⣿⣿⣿⡟⣼⣿⣿⠸⣸⣿⣿⣿⣿⣿⡏⣾⢇⣾⣿⣿⣿⣿⣿⣿⡇⣾⣿⣿⣷⣬⣓⢮⣛⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡜⣿⣆⢿⣿⣿⣿⣿⡟⢿⡜⢣⣾⣿⣿⣿⡏⡎⣼⡇⣿
+# ⣿⣿⣿⡇⣿⣿⣿⡆⡟⣿⣿⣿⣿⣿⡇⡟⣼⣿⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⣿⣿⣿⣷⣮⣍⣒⠍⢋⡩⠭⢹⣿⣿⣿⣿⣿⡘⣿⡌⣿⣿⣿⣿⣿⡘⣷⢹⣿⣿⣿⡟⡸⣸⣿⣇⣿
+# ⣿⣿⣿⢱⣿⣿⣿⢱⡇⣿⣿⣿⣿⣿⡀⢣⣿⣿⣿⣿⣿⣿⢿⣿⢡⣿⣿⣿⣿⣿⣿⣿⣿⣿⢣⣿⡶⢞⣡⣤⡒⠒⠚⣛⣛⣥⢹⣷⠙⣹⣿⣿⣿⣇⣿⡌⣿⣿⣿⢡⢡⣿⣿⣿⣿
+# ⣿⣿⣿⢸⣿⣿⡏⢸⡇⣿⣿⣿⣿⣿⡇⣸⣿⣿⣿⣿⣿⡟⢰⠇⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣴⣶⣶⠟⣩⣴⣾⡿⠛⠛⠙⠫⠌⢁⡌⣿⣿⣿⣿⣿⢸⡇⠿⢟⣵⠃⡇⣿⣿⣿⣿
+# ⣿⣿⣿⢸⣿⣿⡇⢸⡇⣿⣿⣿⣿⣿⣇⢿⣿⣿⣿⣿⡿⢑⠊⣬⡟⢛⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢢⡿⠋⠐⠀⢀⠤⠀⠀⠄⢻⡇⣿⣿⣿⣿⡿⢸⣇⣜⠻⢣⣾⡇⣿⣿⣿⣿
+# ⣿⣿⣿⢸⣿⣿⢸⣸⡇⣿⣿⣿⣿⣿⣿⠸⣿⣿⣿⡋⠎⠈⠾⡛⠵⠿⢿⣦⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⠗⢀⣾⡀⠻⢀⣠⠇⢤⢸⢱⣿⣿⣿⣿⡇⠊⡯⠋⣴⣿⣿⣷⣿⣿⣿⣿
+# ⣐⠶⣿⣬⣭⣭⣼⡃⣇⢻⣿⣿⣿⣿⣿⣇⢿⣿⡿⠃⣰⢟⣡⣾⣿⣷⣦⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⣼⣿⣿⣯⠍⢁⣰⣿⠘⡜⣿⣿⣿⣿⢱⠀⠃⡇⢹⣿⣿⣿⣿⣿⣿⣿
+# ⣜⡳⢄⠲⠎⣭⢟⡃⣿⢸⣿⣿⣿⣿⣿⣿⡘⢟⣥⣾⣧⡾⠛⠉⠉⠉⠉⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⢠⡇⣿⣿⣿⡏⡆⢣⠀⠀⡜⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣶⡍⠻⢿⡜⢷⢸⡆⣿⣿⣿⣿⣿⡝⣧⢻⡻⠿⠟⠁⣠⡆⠰⢷⠀⢀⠀⣍⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢃⣿⡇⣿⣿⡟⡼⢰⢸⢀⠆⡇⢿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⡇⠞⣶⢉⠲⡌⣿⠸⣿⣿⣿⣿⣷⠹⣄⠻⣿⣶⣦⡙⠿⣶⣆⣘⠛⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⣾⣿⡇⣿⠟⣼⢡⢸⢸⣿⢠⢡⣾⣿⣿⣿⣿⡿⣿
+# ⣿⣿⣿⣿⢀⣿⢸⣿⣆⢻⡇⢻⣿⣿⣿⣿⣧⢻⡜⣌⠻⣿⣿⣿⣴⣥⣦⣶⣾⣿⣿⣿⣿⠟⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣾⣿⣿⡇⢏⣾⢣⣾⢨⡇⣿⡆⣼⣿⣼⣿⣿⣿⣇⣿
+# ⣿⣿⣿⣿⡘⢸⣼⣿⣿⡌⣷⢀⢿⣿⣿⣿⣿⣧⠹⡌⢳⠝⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡐⠃⣿⣟⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣣⡾⢡⣿⡏⣼⠃⣿⡇⣿⣿⣿⣿⣿⣿⢸⣿
+# ⣿⣿⣿⣿⡇⡞⣿⣿⣿⣷⡘⡎⡎⢿⣿⣿⣿⣿⡆⡔⠔⢾⣮⡻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢋⣼⣿⣿⣿⣿⣿⡿⢁⣾⣿⢣⡟⡄⣿⡇⣿⣟⣿⣿⣿⡟⣼⣿
+# ⣿⣿⣿⣿⣿⢸⣿⣿⣿⣿⣷⠱⡀⣦⠻⣿⣿⣿⣷⠀⡐⣌⠻⣷⣌⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣛⣯⣵⣾⣿⣿⣿⣿⣿⣿⢏⣴⣿⣿⠃⡚⣰⢇⣿⢱⢻⣿⣿⣿⣿⢇⣿⣿
+# ⣿⣿⣿⣿⣿⡌⣿⣿⣿⣿⣿⡇⡡⠡⢡⡌⢿⣇⢻⣤⢳⠙⣰⣈⣻⣿⣮⣛⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⣡⣿⣿⠟⢁⢀⣴⡿⢸⡿⡘⣼⣿⣿⣿⣿⢸⣿⣿
+# ⣿⣿⣿⣿⣿⣇⢻⣿⣿⣿⣿⡇⡇⠀⠙⠡⣰⣝⠎⡿⡘⡆⣿⣿⣿⣿⣿⣿⣷⣶⣭⣭⣟⣛⣛⡿⠿⠿⠿⣿⣿⣿⡿⢟⣡⣾⡿⠟⠁⠀⡁⢿⣿⣧⣿⡇⢣⣿⣿⣿⣿⣧⣿⢇⣿
+# ⣿⣿⣿⣿⣿⣿⡸⣿⣿⣿⣿⡇⡇⣀⢔⣴⣿⣿⣷⢠⣷⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⡀⠀⡀⠀⣐⣚⣛⣭⠱⢀⡀⢀⣌⢿⣮⠻⣿⣿⠰⣼⣿⣿⣿⣿⣿⡟⣼⣿
+# ⣿⣿⣿⣿⣿⣿⡇⢿⣿⣿⣿⡇⢷⣶⣿⣿⣿⣿⣿⣸⣿⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⡆⣲⡆⣶⡆⣿⣿⡿⠌⢻⣦⡻⣷⡝⠏⢄⣿⣿⣿⣿⣿⣿⢡⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣧⠸⣿⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⢸⣿⣌⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⡇⣿⠇⣱⣶⣬⣝⡣⠹⣷⡜⢿⡆⣸⣿⣿⣿⣿⣿⡟⣼⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⢀⢻⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⣿⣿⣸⣿⣿⣷⡙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢼⡇⢋⡄⣿⠿⠟⠛⠉⠁⠘⢿⣮⢃⣿⣿⣿⣿⣿⣿⢇⣿⣿⣿
+# ⣿⣿⢹⣿⣿⣿⣿⡇⡜⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣮⡻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠘⣠⢸⡇⠠⡀⢀⣀⣀⣀⣤⠈⠻⢸⣿⣿⣿⣿⣿⣿⢸⣿⢋⣿
+# ⣿⣿⡎⣿⣿⣿⣿⣷⢱⢹⣿⣿⢈⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢸⣿⢸⡇⢸⣿⣿⠿⢟⣛⣩⣤⣥⢸⣿⡟⣿⣿⣿⡟⣼⡏⣼⣿
