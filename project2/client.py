@@ -35,7 +35,9 @@ def handle_it(client_socket, domain_name):
                 # Connect to the TLD server
                 tld_socket.connect((next_server, int(sys.argv[2])))
 
-                # Send the same query to the TLD server
+                # Send the same query to the TLD server with incremented identification
+                query = f"0 {domain_name} {iteration} it"
+                iteration += 1
                 tld_socket.sendall(query.encode())
 
                 # Receive the final response
