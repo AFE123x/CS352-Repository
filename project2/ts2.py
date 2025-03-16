@@ -3,86 +3,17 @@ import sys
 
 domain_map = {}
 
-ts1_server = []
-ts2_server = []
-
-
-
-def recursive_connection(host_name,port_num,client_socket,str):
-    print(str)
-    # 0 DomainName identification flags
-    # ['0', 'www.google.com', '1', 'rd']
-    recursive_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    recursive_socket.connect((host_name,port_num))
-    try:
-        inquiry = f"{str[0]} {str[1]} {str[2]} {str[3]}"
-        recursive_socket.sendall(inquiry.encode())
-        data = recursive_socket.recv(1024)
-        client_socket.sendall(data)
-    finally:
-        recursive_socket.close()
-    # recursive_socket = 
-def handle_rd(connection,str,port):
-    global domain_map
-    global ts1_server
-    global ts2_server
-
-    # read the domain, and check if it's in the dictionary
-    if str[1] not in domain_map:
-        tld = str[1].split('.')[-1]
-        if tld == ts1_server[0]:
-            recursive_connection(ts1_server[1],port,connection,str)
-        elif tld == ts2_server[0]:
-            recursive_connection(ts2_server[1],port,connection,str)
-        else:
-            response = f"1 {str[1]} 0.0.0.0 {str[2]} nx"
-            connection.sendall(response.encode())
-    else:
-        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
-        connection.sendall(response.encode())
-
-def handle_it(connection,str):
-    # connection.sendall(response.encode())
-    global domain_map
-    global ts1_server
-    global ts2_server
-
-    # read the domain, and check if it's in the dictionary
-    if str[1] not in domain_map:
-        tld = str[1].split('.')[-1]
-        if tld == ts1_server[0]:
-            response = f"1 {str[1]} {ts1_server[1]} {str[2]} ns"
-            connection.sendall(response.encode())
-        elif tld == ts2_server[0]:
-            # 0 www.google.com 5 rd
-            response = f"1 {str[1]} {ts2_server[1]} {str[2]} ns"
-            connection.sendall(response.encode())
-        else:
-            response = f"1 {str[1]} 0.0.0.0 {str[2]} nx"
-            connection.sendall(response.encode())
-    else:
-        # 0 www.google.com 5 rd
-        # 1 DomainName IPAddress identification flags
-        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
-        connection.sendall(response.encode())
 def main():
-    global ts1_server
-    global ts2_server
     global domain_app
     args = sys.argv
     print(len(args))
     if len(args) < 2:
-        print("python3 rs.py <port_num>")
+        print("python3 ts2.py <port_num>")
         exit(1)
 
 
     # initialize the data structure to search for goods!
-    with open('rsdatabase.txt', 'r') as file:
-        # Read the first two lines separately
-        ts1_server = file.readline().strip().split() # server and top heirchachy thing for ts1 server
-        ts2_server = file.readline().strip().split() # server and top heirchachy thing for ts2 server
-        print(ts1_server)
-        print(ts2_server)
+    with open('ts2database.txt', 'r') as file:
         # Now iterate through the rest of the lines
         for line in file:
             line = line.strip().split()
@@ -103,17 +34,19 @@ def main():
             if not data:
                 break
             str = data.decode()
-            # We can parse the data, and find it in a cool data structure
-
-            str = str.strip().split() # sprlit our string into an array
-            if str[3] == "rd":
-                handle_rd(connection,str,int(args[1]))
-            elif str[3] == "it":
-                handle_it(connection,str)
-            else:
-                response = f"error occured!"
+            str = str.strip().split()
+            # 1 princeton.edu cheese.cs.rutgers.edu 2 ns
+            print(str)
+            if str[1] in domain_map:
+                response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} ra"
                 connection.sendall(response.encode())
-                continue
+            else:
+                response = f"1 {str[1]} 0.0.0.0 {str[3]} nx"
+                connection.sendall(response.encode())
+
+
+
+            
     finally:
         connection.close()
 
