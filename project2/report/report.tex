@@ -1,0 +1,27 @@
+\documentclass{article}
+
+\begin{document}
+\title{CS352 - Project 1 Report}
+\author{Arun Felix and Bhavya Patel}
+\maketitle
+
+\section{Team Details}
+
+\begin{itemize}
+    \item Arun Felix (netid: ajf277)
+    \item Bhavya Patel (netid: bsp75)
+\end{itemize}
+
+\section{Collaboration}
+
+We used the Python documentation, and Bhavya focused on the first half. Arun did the last half and developed testcases.
+
+\section{Implementation of recursive and iterative query functionality}
+
+In this project, recursive resolution queries are implemented by having the client send a recursive query to the root server (RS), which then processes the query to determine if the domain is in its domain map. 
+If not, the RS identifies the appropriate top-level domain (TLD) server (TS1 or TS2) based on the domain's TLD and forwards the query to that server using a recursive connection. 
+The TLD server processes the query and sends back the resolved IP address or an indication that the domain is not found. 
+The RS then forwards this response back to the client, completing the recursive resolution process.
+
+\end{document}
+
