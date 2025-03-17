@@ -28,7 +28,7 @@ The RS then forwards this response back to the client, completing the recursive 
 The iterative query functionality in this project works by having the client first send a request to the Root Server (RS) with the "it" flag. When the RS receives an iterative query, it checks if the domain exists in its own database. 
 If found, it directly returns the IP with an "aa" (authoritative answer) flag. 
 If not found, instead of recursively forwarding the query to the appropriate Top-Level Domain server (TS1 or TS2) as in the recursive mode, it responds with the IP address of the appropriate TS server and a "ns" (name server) flag. 
-The client then handles this response by establishing a new connection directly to the indicated TS server and sending a second query. The client's $handle_it()$ function manages this two-step process: first querying the RS server, then examining the response to determine if a follow-up query to a TS server is needed. 
+The client then handles this response by establishing a new connection directly to the indicated TS server and sending a second query. The client's $handleit()$ function manages this two-step process: first querying the RS server, then examining the response to determine if a follow-up query to a TS server is needed. 
 
 
 \section{Functionality}
