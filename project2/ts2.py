@@ -2,8 +2,14 @@ import socket
 import sys
 
 domain_map = {}
+def write_response_to_file(response):
+    with open('ts2response.txt', 'a') as file:
+        file.write(response + "\n")
+    
 
 def main():
+    with open('ts2response.txt', 'w') as file:
+        pass  # This will create or clear the file
     global domain_app
     args = sys.argv
     print(len(args))
@@ -48,10 +54,14 @@ def main():
                     print(f"Received query: {str}")
                     
                     if str[1] in domain_map:
-                        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} ra"
+                        print(f" code is {str[3]}")
+                        type = "ra" if str[3] == "rd" else "aa"
+                        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} {type}"
+                        write_response_to_file(response)
                         connection.sendall(response.encode())
                     else:
-                        response = f"1 {str[1]} 0.0.0.0 {str[3]} nx"
+                        response = f"1 {str[1]} 0.0.0.0 {str[2]} nx"
+                        write_response_to_file(response)
                         connection.sendall(response.encode())
                         
             except Exception as e:

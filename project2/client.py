@@ -2,6 +2,9 @@ import sys  # for argument vector
 import socket # for our lovely sockets
 
 iteration = 1
+def write_response_to_file(response):
+    with open('resolved.txt', 'a') as file:
+        file.write(response + "\n")
 
 def handle_rd(socket, domain_name):
     global iteration
@@ -9,7 +12,9 @@ def handle_rd(socket, domain_name):
     iteration += 1
     socket.sendall(domain_name.encode())
     response = socket.recv(1024)
+    # write_response_to_file(response.decode())
     print(f"{response.decode()}")
+    write_response_to_file(response.decode())
 
 # handle iterative responses
 def handle_it(client_socket, domain_name):
@@ -19,7 +24,8 @@ def handle_it(client_socket, domain_name):
     iteration += 1
     client_socket.sendall(query.encode())
     response = client_socket.recv(1024).decode()
-    
+    print(f"{response}")
+    write_response_to_file(response)
     # Parse the response
     parts = response.strip().split()
     
@@ -44,7 +50,9 @@ def handle_it(client_socket, domain_name):
                 
                 # Receive response and print it
                 ts_response = ts_socket.recv(1024).decode()
+                # write_response_to_file(ts_response)
                 print(f"{ts_response}")
+                write_response_to_file(ts_response)
                 
             except ConnectionRefusedError:
                 print(f"Connection to {ts_ip}:{ts_port} refused. The TS server might not be running.")
@@ -54,9 +62,12 @@ def handle_it(client_socket, domain_name):
     else:
         # Print the final answer received from the RS server
         print(f"{response}")
+        # write_response_to_file(response)
 
 # defines the main function
 def main():
+    with open('resolved.txt', 'w') as file:
+        pass
     if len(sys.argv) < 3:  # handle invalid arguments
         print("Usage: python3 client <host_name> <port_num>")
         exit(1)
