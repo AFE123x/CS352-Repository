@@ -21,12 +21,21 @@ def recursive_connection(host_name, port_num, client_socket, str):
         recursive_socket.sendall(inquiry.encode())
         data = recursive_socket.recv(1024)
         response = data.decode()
-        
+        array = response.split()
+        print(array)
+        if array[4] == "aa":
+            data = f"{array[0]} {array[1]} {array[2]} {array[3]} ra"
+            write_response_to_file(data)
+            client_socket.sendall(data.encode())
+        else:
+            data = f"{array[0]} {array[1]} {array[2]} {array[3]} nx"
+            write_response_to_file(data)
+            client_socket.sendall(data.encode())
         # Write response to the file
-        write_response_to_file(response)
+        # write_response_to_file(response)
         
-        # Send the response to the client
-        client_socket.sendall(data)
+        # # Send the response to the client
+        # client_socket.sendall(data)
     finally:
         recursive_socket.close()
 

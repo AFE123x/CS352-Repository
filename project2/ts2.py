@@ -55,8 +55,7 @@ def main():
                     
                     if str[1] in domain_map:
                         print(f" code is {str[3]}")
-                        type = "ra" if str[3] == "rd" else "aa"
-                        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} {type}"
+                        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
                         write_response_to_file(response)
                         connection.sendall(response.encode())
                     else:
