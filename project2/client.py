@@ -3,7 +3,7 @@ import socket # for our lovely sockets
 
 iteration = 1
 
-def handle_rd(socket,domain_name):
+def handle_rd(socket, domain_name):
     global iteration
     domain_name = f"0 {domain_name} {iteration} rd"
     iteration += 1
@@ -11,44 +11,49 @@ def handle_rd(socket,domain_name):
     response = socket.recv(1024)
     print(f"{response.decode()}")
 
-# # handle iterative responses
+# handle iterative responses
 def handle_it(client_socket, domain_name):
     global iteration
-
-    # Step 1: Send query to RS
+    # Send initial query to rs server
     query = f"0 {domain_name} {iteration} it"
     iteration += 1
     client_socket.sendall(query.encode())
-
-    # Step 2: Receive response from RS
-    response = client_socket.recv(1024).decode().strip()
-    print(response)
-    response_data = response.split()
-
-    # Step 3: If RS redirects to a TLD server (ns flag), follow the referral
-    while response_data[-1] == "ns":
-        next_server = response_data[2]  # Extract TLD server hostname
-
-        # Create a new socket for the TLD server connection
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tld_socket:
-            try:
-                # Connect to the TLD server
-                tld_socket.connect((next_server, int(sys.argv[2])))
-
-                # Send the same query to the TLD server with incremented identification
-                query = f"0 {domain_name} {iteration} it"
-                iteration += 1
-                tld_socket.sendall(query.encode())
-
-                # Receive the final response
-                response = tld_socket.recv(1024).decode().strip()
-                print(response)
-                response_data = response.split()
+    response = client_socket.recv(1024).decode()
+    
+    # Parse the response
+    parts = response.strip().split()
+    
+    # Only proceed to query the TS server if the response is a referral (ns)
+    # Otherwise, we've already got our final answer (aa or nx)
+    if len(parts) >= 5 and parts[4] == "ns":
+        # Connect to the TS server
+        ts_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ts_ip = parts[2]  # IP address is in the 3rd position
+        
+        try:
+            # Connect to the TS server using the port from command line
+            ts_port = int(sys.argv[2])  # Use the TS port from third argument
             
-            except Exception as e:
-                print(f"Error connecting to {next_server}: {e}")
-                return
-
+            try:
+                ts_socket.connect((ts_ip, ts_port))
+                
+                # Send query to the TS server
+                ts_query = f"0 {domain_name} {iteration} it"
+                iteration += 1
+                ts_socket.sendall(ts_query.encode())
+                
+                # Receive response and print it
+                ts_response = ts_socket.recv(1024).decode()
+                print(f"{ts_response}")
+                
+            except ConnectionRefusedError:
+                print(f"Connection to {ts_ip}:{ts_port} refused. The TS server might not be running.")
+                
+        finally:
+            ts_socket.close()
+    else:
+        # Print the final answer received from the RS server
+        print(f"{response}")
 
 # defines the main function
 def main():
@@ -60,8 +65,8 @@ def main():
     host_name = sys.argv[1]
     port_num = int(sys.argv[2])
     # Creates our sockets
-    client_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-    client_socket.connect((host_name,port_num))
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((host_name, port_num))
     try:
         with open('hostnames.txt', 'r') as file:
             for line in file:
@@ -72,9 +77,9 @@ def main():
                 domain_name = args[0]
                 response_type = args[1]
                 if response_type == "rd":
-                    handle_rd(client_socket,domain_name)
+                    handle_rd(client_socket, domain_name)
                 elif response_type == "it":
-                    handle_it(client_socket,domain_name)
+                    handle_it(client_socket, domain_name)
                 else:
                     print(f"Unknown type '{response_type}' in line: {line.strip()}")
     finally:
@@ -82,35 +87,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# ⣿⣿⣿⣿⣿⣿⡿⣡⢏⣾⣿⢃⣿⣿⣿⠏⣸⠇⢸⣿⣿⣿⣿⣿⣿⣿⡇⣾⣿⣿⣿⣿⢻⠽⣿⡡⢛⢻⣿⠘⣿⣟⢻⣿⣿⣧⢡⣀⣆⠡⡑⣄⢢⡙⣿⣿⣿⣿⣿⣿
-# ⣿⡛⠿⠃⠾⠿⢡⢇⣾⣿⡏⣼⣿⣿⣿⣤⡿⣠⣾⣿⣿⡇⢸⣿⣿⣿⠇⣿⣿⣿⣿⡇⡇⣄⣿⣷⣼⢸⣿⡇⣿⣿⡘⣿⣿⣿⡆⢿⣿⣾⣿⡜⢆⢳⣌⢿⣿⣿⣿⣿
-# ⣡⣶⣿⠯⣹⣷⣮⣜⢻⣿⢡⣿⣿⣿⣿⣿⠇⣿⣿⣿⣿⠇⣿⣿⣿⣿⢸⣿⣿⣿⣿⡇⣗⣿⣿⣿⣿⡌⣿⡇⢹⣿⡇⣿⣿⣿⣿⢸⣿⣿⣿⣿⡎⢆⢻⣦⠺⣿⣿⣿
-# ⣿⣿⣷⣿⣿⣿⣷⣽⢸⡏⣼⣿⣿⣿⣿⣿⢰⣿⣿⣿⡟⠀⣿⣿⣿⡏⢸⣿⣿⣿⣿⡇⣿⣿⣿⣿⣿⡇⣿⡇⡘⣿⣧⢸⣿⣿⣿⡇⣿⣿⡙⣿⣿⡜⡎⣿⣦⢹⣿⣿
-# ⣿⣿⣿⣿⣿⣿⣿⣿⢘⢁⣿⣿⣿⣿⣿⣿⢸⣿⣏⡛⠇⢸⣿⣿⣿⢁⡌⣿⣿⣿⣿⣧⢹⣿⣿⣿⣿⡇⣿⡇⡇⣿⣿⠀⠟⣻⣿⡇⣿⣿⡇⣿⣿⢳⢱⠸⢾⣆⢻⣿
-# ⣿⣿⣿⣿⣿⣿⣿⡟⣼⢸⣿⣿⣿⣿⣿⣿⢸⣿⣿⣿⢸⢰⣬⣍⡛⠸⠇⢿⣿⣿⣿⣿⢸⣿⣿⣿⣿⢃⠿⠁⠃⢩⣴⢰⢸⣿⣿⡇⣿⣿⣷⢸⣿⡆⠆⡇⡜⣿⡌⣿
-# ⠄⣨⣍⡉⠭⢭⣍⢰⡆⣾⣿⣿⣿⣿⣿⣿⠸⣿⣿⡏⣼⡆⣿⣛⡃⣬⣤⠐⣲⣼⣿⣿⡄⢹⣿⣯⢁⢠⡄⣨⣥⢸⡟⣸⡆⣿⣿⡇⣿⣿⣿⠈⣿⡇⢰⢱⠠⣿⣷⣼
-# ⣿⣟⣥⣾⣿⣷⢸⡎⠃⣿⣿⣿⣿⣿⣿⣿⠀⣿⣿⡇⠟⠃⠭⣁⡂⠭⢍⡃⢻⣿⣿⣿⣇⢸⣿⣿⠇⢊⠡⢒⣓⠐⠅⣛⣧⢻⣿⡇⣿⣿⡿⡆⣿⡇⡇⣸⢸⣿⣿⣿
-# ⣿⣿⣿⣿⣿⣿⣾⡇⢂⣿⣿⣿⣿⣿⣿⣿⢠⢹⠟⡀⠴⡒⠈⣩⡁⠙⠢⠈⣂⢻⣿⣿⣿⠸⣿⡿⠀⠀⠊⠉⢉⢈⠁⢦⡹⢸⣿⠀⢸⣿⡇⡇⣿⠇⣧⢻⠀⣿⣿⣿
-# ⣿⣿⣿⣿⡿⠟⣹⡇⢸⣿⣿⣿⣿⣿⣿⣿⢸⠆⠜⡁⡎⠴⠁⠻⠇⣷⠘⣦⣽⣆⢻⣿⣿⡇⢻⣧⢀⡎⠜⠁⠀⠀⡆⢦⠱⠈⡏⢸⠸⣿⢃⢡⡿⢰⣿⠀⢸⣿⣿⣿
-# ⣛⠿⠷⠿⢛⣋⣭⣾⢸⣿⣿⣿⣿⣿⣿⣿⢸⠸⠀⠇⠡⠖⠀⠈⠀⡒⠆⣿⣿⣿⣦⡙⣿⣿⡘⢡⣾⠁⠒⠀⠀⢐⠂⣸⡇⠁⢁⣿⡇⡟⣸⣾⢃⣿⣿⢠⢸⣿⣿⣿
-# ⣿⣿⣿⡿⢸⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⡿⢸⣆⣹⣄⡆⢼⣦⣄⡠⣿⢀⣿⣿⣿⣿⡟⡨⠻⢷⠸⣿⡆⠿⣦⣐⢻⢀⣿⣧⡇⢸⣿⡇⢱⡿⠃⢸⣿⣿⣿⣷⣿⣿⣿
-# ⣿⣿⣿⡇⣾⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⡇⣸⣿⣿⣿⣿⣦⣥⣿⣧⣥⣾⣿⣿⣿⡟⣀⣴⣿⣦⣅⣹⣿⣦⣭⣭⣵⣿⣿⣿⠃⣿⣿⡇⣿⣷⠀⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⣷⡅⣿⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢸⠏⣹⣿⣿⣿⠀⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⠏⡀⣿⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⢏⣼⣿⣿⣿⣿⠀⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⣶⡇⣿⣿⣿⡟⢸⣿⣿⣿⣿⣿⣿⡇⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⣾⣿⣿⣿⣿⣿⠀⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⣿⢃⣿⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⡇⢸⢈⠻⣿⣿⣿⣿⣿⣿⣿⣿⣟⣩⣙⣛⣛⣿⣛⣟⣿⣿⣿⣿⣿⣿⣿⡿⣣⡆⣿⣿⣿⣿⣿⣿⠀⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⣿⢸⣿⣿⣿⡇⡘⣿⡏⣿⣿⣿⣿⣿⠸⢸⡗⣨⡻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢛⣡⢸⣿⡇⣿⣿⣿⣿⣿⣿⠀⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⢿⢸⣿⣿⣿⢰⡇⣿⡏⣿⣿⣿⣿⣿⠀⠾⢃⣛⣩⡄⣝⡻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢛⣥⢠⣿⣿⢸⣿⡇⣿⣿⣿⣿⣿⡿⡆⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⡼⣸⣿⣿⡿⢸⡇⣿⣥⢹⣿⣿⣿⣿⠀⣆⢿⣿⣿⡇⣿⣿⣶⣬⣙⠻⢿⣿⣿⣿⣿⠿⢋⣥⣶⣶⠌⡘⢿⣿⢸⣿⡇⣿⣿⣿⣿⣿⡇⡇⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⡃⣿⣿⣿⡇⣿⣷⢹⡇⠸⣿⣿⣿⣿⠈⣿⣷⣬⣝⣃⠻⠿⠿⣿⣿⣷⣦⣄⡉⠉⠀⡀⠞⣛⣩⣵⣾⡇⣼⣿⢸⣿⡇⣿⣿⣿⣿⢸⠇⡇⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣿⠇⣿⣿⣿⢡⣿⣿⢸⣷⠀⢿⣿⣿⣿⠀⢹⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣭⣝⡻⠿⢋⣴⣿⣿⣿⣿⣿⢁⣿⣿⡄⣿⡇⣿⣿⣿⡇⣾⢸⡇⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⣷⢸⣿⣿⡏⣼⠿⠿⠌⣿⠘⠸⣿⣿⣿⡆⡂⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⣿⣿⣿⣿⣿⣿⡏⠴⢶⣌⠃⠛⠃⣿⣿⣿⠃⡟⢸⡇⢸⣿⣿⣿⣿⣿⣿⣿
-# ⣿⡟⣼⠟⢉⣠⣤⡶⠶⠆⢻⡄⠧⢹⣿⣿⡇⣿⣷⣍⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⣿⣿⡿⢰⣾⣦⡙⠿⠿⠇⣿⣿⡟⢠⡇⣦⣄⠺⣿⣿⣿⣿⣿⣿⣿
-# ⣿⠇⢁⣴⡿⣫⣴⣾⣿⣿⠸⡇⣿⣇⢻⣿⡇⢿⣿⣧⡑⢦⣝⡻⢿⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⣿⠟⡹⢻⣿⣿⣿⣿⣿⢸⣿⡿⢰⢸⢰⣮⡙⢷⡈⢿⣿⢿⣿⣿⣿
-# ⡟⢀⣾⢋⣼⣿⣿⣿⣿⣿⡇⠃⣿⣿⣆⢻⣧⢸⣿⣿⣿⣦⣝⠻⣷⣦⣍⣛⣻⣿⣿⡖⣿⣿⠟⣡⢊⢄⣼⣿⣿⣿⣿⣿⢸⡟⣱⣿⠈⣾⣿⣿⣦⡙⣄⢿⣿⣿⣿⣿
-# ⢀⣾⢃⣾⣿⣿⣿⢹⣿⣿⣿⣄⣿⣿⣿⣆⠻⢸⣿⣿⣿⣿⣿⣷⣬⡛⢿⣿⣿⣿⣿⣷⢸⣶⣿⡃⣣⣾⣿⣿⣿⣿⣿⡇⢊⣴⣿⣇⣰⣿⣿⣿⡟⢳⡜⡌⢸⣿⣿⣿
-# ⣾⢃⣾⣿⣿⣿⣿⡌⣿⣿⣿⣿⣿⣿⣿⣿⣧⣼⣿⣿⣿⣿⣿⣿⣿⣿⣷⣌⡛⢿⣿⡇⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣿⣿⣿⣿⡏⣿⣿⣿⡇⣿⣿⡜⡘⣿⣿⣿
-# ⣯⣼⣿⢿⣿⣿⣿⣧⢹⣿⣿⡿⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⢹⣿⣿⡇⣿⣿⣷⡀⢹⣿⣿
-# ⣿⣿⣿⡄⣿⣿⣿⣿⡈⣿⣿⡇⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢸⣿⣿⡇⣿⣿⡿⣧⠀⢿⣿
-# ⣿⣿⣿⣷⠸⣿⣿⣿⡇⢿⣿⡇⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢸⣿⣿⢰⣿⡿⢰⣿⡆⠸⣿
