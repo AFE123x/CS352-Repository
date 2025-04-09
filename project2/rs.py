@@ -45,7 +45,7 @@ def handle_rd(connection, str, port):
     global ts2_server
 
     # Read the domain, and check if it's in the dictionary
-    if str[1] not in domain_map:
+    if str[1].lower() not in domain_map:
         tld = str[1].split('.')[-1]
         if tld == ts1_server[0]:
             recursive_connection(ts1_server[1], port, connection, str)
@@ -57,7 +57,7 @@ def handle_rd(connection, str, port):
             write_response_to_file(response)
             connection.sendall(response.encode())
     else:
-        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
+        response = f"1 {str[1]} {domain_map[str[1].lower()]} {str[2]} aa"
         # Write response to the file
         write_response_to_file(response)
         connection.sendall(response.encode())
@@ -68,7 +68,7 @@ def handle_it(connection, str):
     global ts2_server
 
     # Read the domain, and check if it's in the dictionary
-    if str[1] not in domain_map:
+    if str[1].lower() not in domain_map:
         tld = str[1].split('.')[-1]
         if tld == ts1_server[0]:
             response = f"1 {str[1]} {ts1_server[1]} {str[2]} ns"
@@ -86,7 +86,7 @@ def handle_it(connection, str):
             write_response_to_file(response)
             connection.sendall(response.encode())
     else:
-        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
+        response = f"1 {str[1]} {domain_map[str[1].lower()]} {str[2]} aa"
         # Write response to the file
         write_response_to_file(response)
         connection.sendall(response.encode())
@@ -113,7 +113,7 @@ def main():
             if len(line) < 2:
                 print("Failed to read line properly")
                 continue
-            domain_map[line[0]] = line[1]
+            domain_map[line[0].lower()] = line[1]
 
     # Initialize socket
     host_name = socket.gethostname()  # Get the current host computer!
