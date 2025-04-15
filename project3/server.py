@@ -66,7 +66,40 @@ signal.signal(signal.SIGINT, sigint_handler)
 # Read login credentials for all the users
 # Read secret data of all the users
 
+# Dictionary to store username -> password mappings
+user_credentials = {}
+# Dictionary to store username -> secret mappings
+user_secrets = {}
 
+# Read login credentials from passwords.txt
+try:
+    with open('passwords.txt', 'r') as password_file:
+        for line in password_file:
+            # Split the line into username and password
+            parts = line.strip().split(' ', 1)
+            if len(parts) == 2:
+                username, password = parts
+                user_credentials[username] = password
+    print(f"Loaded credentials for {len(user_credentials)} users")
+except FileNotFoundError:
+    print("Warning: passwords.txt file not found!")
+except Exception as e:
+    print(f"Error reading passwords.txt: {e}")
+
+# Read secret data from secrets.txt
+try:
+    with open('secrets.txt', 'r') as secrets_file:
+        for line in secrets_file:
+            # Split the line into username and secret
+            parts = line.strip().split(' ', 1)
+            if len(parts) == 2:
+                username, secret = parts
+                user_secrets[username] = secret
+    print(f"Loaded secrets for {len(user_secrets)} users")
+except FileNotFoundError:
+    print("Warning: secrets.txt file not found!")
+except Exception as e:
+    print(f"Error reading secrets.txt: {e}")
 
 
 ### Loop to accept incoming HTTP connections and respond.
