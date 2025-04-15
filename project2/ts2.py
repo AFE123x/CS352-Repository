@@ -25,7 +25,7 @@ def main():
             if len(line) < 2:
                 print("Failed to read line properly")
                 continue
-            domain_map[line[0]] = line[1]
+            domain_map[line[0].lower()] = line[1]
             
     # initialize socket
     host_name = socket.gethostname() # get's the current host computer!
@@ -53,9 +53,9 @@ def main():
                     str = data.decode().strip().split()
                     print(f"Received query: {str}")
                     
-                    if str[1] in domain_map:
+                    if str[1].lower() in domain_map:
                         print(f" code is {str[3]}")
-                        response = f"1 {str[1]} {domain_map[str[1]]} {str[2]} aa"
+                        response = f"1 {str[1]} {domain_map[str[1].lower()]} {str[2]} aa"
                         write_response_to_file(response)
                         connection.sendall(response.encode())
                     else:
