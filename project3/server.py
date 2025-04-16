@@ -3,6 +3,30 @@ import signal
 import sys
 import random
 
+passwords_list = {}
+secrets_list = {}
+
+# Populate the lists with the contents of passwords.txt and secrets.txt
+def populate_passwords():
+    global passwords_list
+    global secrets_list
+    # Read from passwords.txt
+    with open("passwords.txt", "r") as pw_file:
+        for line in pw_file:
+            user, password = line.strip().split()
+            passwords_list[user] = password
+
+    # Read from secrets.txt
+    with open("secrets.txt", "r") as sec_file:
+        for line in sec_file:
+            user, secret = line.strip().split()
+            secrets_list[user] = secret
+    
+    print(passwords_list)
+    print(secrets_list)
+
+
+
 # Read a command line argument for the port where the server
 # must run.
 port = 8080
@@ -11,7 +35,7 @@ if len(sys.argv) > 1:
 else:
     print("Using default port 8080")
 hostname = socket.gethostname()
-
+populate_passwords()
 # Start a listening server socket on the port
 sock = socket.socket()
 sock.bind(('', port))
@@ -66,47 +90,44 @@ signal.signal(signal.SIGINT, sigint_handler)
 # Read login credentials for all the users
 # Read secret data of all the users
 
-# Dictionary to store username -> password mappings
-user_credentials = {}
-# Dictionary to store username -> secret mappings
-user_secrets = {}
+'''
+handlepostrequest(entity)
+this function will parse the entity body,
+and handle the page depending on what the
+client wants.
+'''
+def handlepostrequest(entity):
+    params = {}
+    pairs = entity.split('&')
 
-# Read login credentials from passwords.txt
-try:
-    with open('passwords.txt', 'r') as password_file:
-        for line in password_file:
-            # Split the line into username and password
-            parts = line.strip().split(' ', 1)
-            if len(parts) == 2:
-                username, password = parts
-                user_credentials[username] = password
-    print(f"Loaded credentials for {len(user_credentials)} users")
-except FileNotFoundError:
-    print("Warning: passwords.txt file not found!")
-except Exception as e:
-    print(f"Error reading passwords.txt: {e}")
+    for pair in pairs:
+        if '=' in pair:
+            key, value = pair.split('=', 1)
+            params[key] = value
 
-# Read secret data from secrets.txt
-try:
-    with open('secrets.txt', 'r') as secrets_file:
-        for line in secrets_file:
-            # Split the line into username and secret
-            parts = line.strip().split(' ', 1)
-            if len(parts) == 2:
-                username, secret = parts
-                user_secrets[username] = secret
-    print(f"Loaded secrets for {len(user_secrets)} users")
-except FileNotFoundError:
-    print("Warning: secrets.txt file not found!")
-except Exception as e:
-    print(f"Error reading secrets.txt: {e}")
+    username = params.get('username', '')
+    password = params.get('password', '')
 
+    # Make sure both are provided
+    if not username or not password:
+        print("Missing username or password!")
+        return
+
+    # Check if user exists and password matches
+    if username in passwords_list and passwords_list[username] == password:
+        if username in secrets_list:
+            return success_page + secrets_list[username]
+        else:
+            return success_page
+    else:
+        return bad_creds_page
 
 ### Loop to accept incoming HTTP connections and respond.
+requestmade = False
 while True:
     client, addr = sock.accept()
+    print("waiting for message")
     req = client.recv(1024)
-
     # Let's pick the headers and entity body apart
     header_body = req.decode().split('\r\n\r\n')
     headers = header_body[0]
@@ -116,7 +137,13 @@ while True:
 
     # TODO: Put your application logic here!
     # Parse headers and body and perform various actions
-
+    request_type = headers.split('\r\n')
+    request_type = request_type[0].split(' ')
+    # print(f'request type: {request_type[0]}')
+    toreturn = ""
+    if request_type[0] == "POST":
+        toreturn = handlepostrequest(body)
+        requestmade = True
     # OPTIONAL TODO:
     # Set up the port/hostname for the form's submit URL.
     # If you want POSTing to your server to
@@ -134,7 +161,12 @@ while True:
     # (1) `html_content_to_send` => add the HTML content you'd
     # like to send to the client.
     # Right now, we just send the default login page.
-    html_content_to_send = login_page % submit_hostport
+    # html_content_to_send = login_page % submit_hostport
+    if requestmade == True:
+        html_content_to_send = toreturn % submit_hostport
+        requestmade = False
+    else:
+        html_content_to_send = login_page % submit_hostport
     # But other possibilities exist, including
     # html_content_to_send = (success_page % submit_hostport) + <secret>
     # html_content_to_send = bad_creds_page % submit_hostport
