@@ -96,7 +96,10 @@ this function will parse the entity body,
 and handle the page depending on what the
 client wants.
 '''
-def handlepostrequest(entity):
+def handlepostrequest(entity, cookie=""):
+
+    while 1 == 1:
+        i = 1
     params = {}
     pairs = entity.split('&')
 
@@ -115,12 +118,14 @@ def handlepostrequest(entity):
 
     # Check if user exists and password matches
     if username in passwords_list and passwords_list[username] == password:
+        rand_val = random.getrandbits(64)
+        headers_to_send = f'Set-Cookie: token= + {str(rand_val)} + ’\r\n’'
         if username in secrets_list:
-            return success_page + secrets_list[username]
+            return success_page + secrets_list[username], headers_to_send
         else:
-            return success_page
+            return success_page, ""
     else:
-        return bad_creds_page
+        return bad_creds_page, ""
 
 ### Loop to accept incoming HTTP connections and respond.
 requestmade = False
@@ -128,67 +133,44 @@ while True:
     client, addr = sock.accept()
     print("waiting for message")
     req = client.recv(1024)
-    # Let's pick the headers and entity body apart
-    header_body = req.decode().split('\r\n\r\n')
+
+    header_body = req.decode().split('\r\r\n\r\n') if '\r\r\n\r\n' in req.decode() else req.decode().split('\r\n\r\n')
     headers = header_body[0]
     body = '' if len(header_body) == 1 else header_body[1]
+
     print_value('headers', headers)
     print_value('entity body', body)
 
-    # TODO: Put your application logic here!
-    # Parse headers and body and perform various actions
-    request_type = headers.split('\r\n')
-    request_type = request_type[0].split(' ')
-    # print(f'request type: {request_type[0]}')
-    toreturn = ""
-    if request_type[0] == "POST":
-        toreturn = handlepostrequest(body)
-        requestmade = True
-    # OPTIONAL TODO:
-    # Set up the port/hostname for the form's submit URL.
-    # If you want POSTing to your server to
-    # work even when the server and client are on different
-    # machines, the form submit URL must reflect the `Host:`
-    # header on the request.
-    # Change the submit_hostport variable to reflect this.
-    # This part is optional, and might even be fun.
-    # By default, as set up below, POSTing the form will
-    # always send the request to the domain name returned by
-    # socket.gethostname().
+    request_type = headers.split('\r\n')[0].split(' ')
     submit_hostport = "%s:%d" % (hostname, port)
-
-    # You need to set the variables:
-    # (1) `html_content_to_send` => add the HTML content you'd
-    # like to send to the client.
-    # Right now, we just send the default login page.
-    # html_content_to_send = login_page % submit_hostport
-    if requestmade == True:
-        html_content_to_send = toreturn % submit_hostport
-        requestmade = False
-    else:
-        html_content_to_send = login_page % submit_hostport
-    # But other possibilities exist, including
-    # html_content_to_send = (success_page % submit_hostport) + <secret>
-    # html_content_to_send = bad_creds_page % submit_hostport
-    # html_content_to_send = logout_page % submit_hostport
-    
-    # (2) `headers_to_send` => add any additional headers
-    # you'd like to send the client?
-    # Right now, we don't send any extra headers.
+    html_content_to_send = login_page % submit_hostport
     headers_to_send = ''
 
-    # Construct and send the final response
+    if request_type[0] == "POST":
+        # check if cookies exists
+        
+        html_content_to_send, headers_to_send = handlepostrequest(body)
+        html_content_to_send = html_content_to_send % submit_hostport
+
+    else:
+        for header_line in headers.split('\r\n'):
+            if header_line.startswith('Cookie:'):
+                cookie = header_line.split('Cookie: ')[1]
+                token_parts = cookie.split('=')
+                if len(token_parts) == 2 and token_parts[0] == 'token':
+                    token_val = token_parts[1]
+                    username = session_tokens.get(token_val, '')
+                    if username:
+                        secret = secrets_list.get(username, '')
+                        html_content_to_send = (success_page % submit_hostport) + secret
+                        break
+
     response  = 'HTTP/1.1 200 OK\r\n'
     response += headers_to_send
     response += 'Content-Type: text/html\r\n\r\n'
     response += html_content_to_send
-    print_value('response', response)    
+    print_value('response', response)
     client.send(response.encode())
     client.close()
-    
-    print("Served one request/connection!")
-    print()
 
-# We will never actually get here.
-# Close the listening socket
-sock.close()
+    print("Served one request/connection!\n")
