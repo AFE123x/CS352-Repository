@@ -35,10 +35,11 @@ if len(sys.argv) > 1:
     port = int(sys.argv[1])
 else:
     print("Using default port 8080")
-hostname = "localhost"
+
 populate_passwords()
 # Start a listening server socket on the port
 sock = socket.socket()
+hostname = socket.gethostname()
 sock.bind(('', port))
 sock.listen(2)
 
