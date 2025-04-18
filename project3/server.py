@@ -35,7 +35,7 @@ if len(sys.argv) > 1:
     port = int(sys.argv[1])
 else:
     print("Using default port 8080")
-hostname = socket.gethostname()
+hostname = "localhost"
 populate_passwords()
 # Start a listening server socket on the port
 sock = socket.socket()
@@ -129,6 +129,7 @@ def handlepostrequest(entity, cookie=""):
 
         # Store token in session_tokens
         session_tokens[rand_val_str] = username
+        print(f"Saved cookie: token={rand_val_str} for user {username}")
 
         # Prepare Set-Cookie header to send
         headers_to_send = f'Set-Cookie: token={rand_val_str}\r\n'
@@ -143,10 +144,8 @@ def handlepostrequest(entity, cookie=""):
 
 
 ### Loop to accept incoming HTTP connections and respond.
-requestmade = False
 while True:
     client, addr = sock.accept()
-    print("waiting for message")
     req = client.recv(1024)
 
     header_body = req.decode().split('\r\r\n\r\n') if '\r\r\n\r\n' in req.decode() else req.decode().split('\r\n\r\n')
@@ -157,15 +156,15 @@ while True:
     print_value('entity body', body)
 
     request_type = headers.split('\r\n')[0].split(' ')
-
     submit_hostport = "%s:%d" % (hostname, port)
+
     headers_to_send = ''
     html_content_to_send = ''
 
     cookie_val = ''
     found_cookie = False
 
-    # First check if the request has a cookie
+    # Check if the request has a cookie
     for header_line in headers.split('\r\n'):
         if header_line.startswith('Cookie:'):
             cookie = header_line.split('Cookie: ')[1]
@@ -175,23 +174,38 @@ while True:
                 found_cookie = True
                 break
 
+    # --- First: check if it's a logout request
     if request_type[0] == "POST":
-        html_content_to_send, headers_to_send = handlepostrequest(body, cookie_val)
-        if '%s' in html_content_to_send:
-            html_content_to_send = html_content_to_send % submit_hostport
+        params = {}
+        pairs = body.split('&')
+        for pair in pairs:
+            if '=' in pair:
+                key, value = pair.split('=', 1)
+                params[key] = value
+        if params.get('action') == 'logout':
+            print("Logout requested!")
+            expired_cookie_header = 'Set-Cookie: token=; expires=Thu, 01 Jan 1970 00:00:00 GMT\r\n'
+            html_content_to_send = logout_page % submit_hostport
+            headers_to_send = expired_cookie_header
+        else:
+            # Handle login normally
+            html_content_to_send, headers_to_send = handlepostrequest(body, cookie_val)
+            if '%s' in html_content_to_send:
+                html_content_to_send = html_content_to_send % submit_hostport
 
-
+    # --- Second: if cookie is present and valid
     elif found_cookie:
-        # No POST, but cookie exists → try to validate it
         username = session_tokens.get(cookie_val, '')
         if username:
+            # Valid cookie → Auto-login!
             secret = secrets_list.get(username, '')
             html_content_to_send = (success_page % submit_hostport) + secret
         else:
-            html_content_to_send = login_page % submit_hostport
+            # Invalid cookie
+            html_content_to_send = bad_creds_page % submit_hostport
 
+    # --- Third: no cookie and not POST, show login page
     else:
-        # No cookie and no post → serve login page
         html_content_to_send = login_page % submit_hostport
 
     response  = 'HTTP/1.1 200 OK\r\n'
