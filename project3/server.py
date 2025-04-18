@@ -97,9 +97,6 @@ and handle the page depending on what the
 client wants.
 '''
 def handlepostrequest(entity, cookie=""):
-
-    while 1 == 1:
-        i = 1
     params = {}
     pairs = entity.split('&')
 
@@ -108,24 +105,33 @@ def handlepostrequest(entity, cookie=""):
             key, value = pair.split('=', 1)
             params[key] = value
 
+    # Check if this is a logout request
+    if params.get('action') == 'logout':
+        print("Logout requested!")
+        # Set expired cookie header
+        expired_cookie_header = 'Set-Cookie: token=; expires=Thu, 01 Jan 1970 00:00:00 GMT\r\n'
+        return logout_page % (hostname + ":" + str(port)), expired_cookie_header
+
     username = params.get('username', '')
     password = params.get('password', '')
 
     # Make sure both are provided
     if not username or not password:
         print("Missing username or password!")
-        return
+        return bad_creds_page, ''
 
     # Check if user exists and password matches
     if username in passwords_list and passwords_list[username] == password:
         rand_val = random.getrandbits(64)
-        headers_to_send = f'Set-Cookie: token= + {str(rand_val)} + ’\r\n’'
+        # Store the token in session_tokens (your partner will fix it)
+        headers_to_send = f'Set-Cookie: token={str(rand_val)}\r\n'
         if username in secrets_list:
             return success_page + secrets_list[username], headers_to_send
         else:
-            return success_page, ""
+            return success_page, ''
     else:
-        return bad_creds_page, ""
+        return bad_creds_page, ''
+
 
 ### Loop to accept incoming HTTP connections and respond.
 requestmade = False
@@ -147,10 +153,9 @@ while True:
     headers_to_send = ''
 
     if request_type[0] == "POST":
-        # check if cookies exists
-        
         html_content_to_send, headers_to_send = handlepostrequest(body)
         html_content_to_send = html_content_to_send % submit_hostport
+
 
     else:
         for header_line in headers.split('\r\n'):
