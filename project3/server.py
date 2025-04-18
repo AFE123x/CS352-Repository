@@ -5,6 +5,7 @@ import random
 
 passwords_list = {}
 secrets_list = {}
+session_tokens = {}
 
 # Populate the lists with the contents of passwords.txt and secrets.txt
 def populate_passwords():
@@ -122,11 +123,19 @@ def handlepostrequest(entity, cookie=""):
 
     # Check if user exists and password matches
     if username in passwords_list and passwords_list[username] == password:
+        # Generate random 64-bit token
         rand_val = random.getrandbits(64)
-        # Store the token in session_tokens (your partner will fix it)
-        headers_to_send = f'Set-Cookie: token={str(rand_val)}\r\n'
+        rand_val_str = str(rand_val)
+
+        # Store token in session_tokens
+        session_tokens[rand_val_str] = username
+
+        # Prepare Set-Cookie header to send
+        headers_to_send = f'Set-Cookie: token={rand_val_str}\r\n'
+
+        # Prepare success page
         if username in secrets_list:
-            return success_page + secrets_list[username], headers_to_send
+            return (success_page + secrets_list[username]), headers_to_send
         else:
             return success_page, ''
     else:
@@ -148,27 +157,42 @@ while True:
     print_value('entity body', body)
 
     request_type = headers.split('\r\n')[0].split(' ')
+
     submit_hostport = "%s:%d" % (hostname, port)
-    html_content_to_send = login_page % submit_hostport
     headers_to_send = ''
+    html_content_to_send = ''
+
+    cookie_val = ''
+    found_cookie = False
+
+    # First check if the request has a cookie
+    for header_line in headers.split('\r\n'):
+        if header_line.startswith('Cookie:'):
+            cookie = header_line.split('Cookie: ')[1]
+            token_parts = cookie.split('=')
+            if len(token_parts) == 2 and token_parts[0] == 'token':
+                cookie_val = token_parts[1]
+                found_cookie = True
+                break
 
     if request_type[0] == "POST":
-        html_content_to_send, headers_to_send = handlepostrequest(body)
-        html_content_to_send = html_content_to_send % submit_hostport
+        html_content_to_send, headers_to_send = handlepostrequest(body, cookie_val)
+        if '%s' in html_content_to_send:
+            html_content_to_send = html_content_to_send % submit_hostport
 
+
+    elif found_cookie:
+        # No POST, but cookie exists → try to validate it
+        username = session_tokens.get(cookie_val, '')
+        if username:
+            secret = secrets_list.get(username, '')
+            html_content_to_send = (success_page % submit_hostport) + secret
+        else:
+            html_content_to_send = login_page % submit_hostport
 
     else:
-        for header_line in headers.split('\r\n'):
-            if header_line.startswith('Cookie:'):
-                cookie = header_line.split('Cookie: ')[1]
-                token_parts = cookie.split('=')
-                if len(token_parts) == 2 and token_parts[0] == 'token':
-                    token_val = token_parts[1]
-                    username = session_tokens.get(token_val, '')
-                    if username:
-                        secret = secrets_list.get(username, '')
-                        html_content_to_send = (success_page % submit_hostport) + secret
-                        break
+        # No cookie and no post → serve login page
+        html_content_to_send = login_page % submit_hostport
 
     response  = 'HTTP/1.1 200 OK\r\n'
     response += headers_to_send
