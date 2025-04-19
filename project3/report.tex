@@ -1,0 +1,44 @@
+\documentclass{article}
+
+\begin{document}
+\title{Project 3 Report}
+\author{Arun Felix (ajf277) and Bhavya Patel (bsp75)}
+\maketitle
+
+\section{Team Details}
+
+Bhavya and I worked on this project together. You can find the netids above.
+
+\subsection{Collaboration}
+Bhavya worked on parts 3 and 7. I worked on 4 and 5. We both did 6. We discussed testcases with other colleagues, and used resources like stack overflow for troubleshooting purposes.
+
+\section{Implementation}
+
+We were able, to the best of our abilities, to test and verify our implementation works as intended.
+
+\section{Developement Process}
+
+Overall, the assignment helped us learn about the HTTP protocol and cookies. The given source code look nice, although it would've been better if there was an explicit main function.
+
+\begin{itemize}
+    \item The first two steps was trivial, only needing to understand what the code was doing.
+    \item The third step was also very straight forward. It was simply the matter of implementing a keyvalue table for the username and password, and the secret key.
+    \item Step four was slightly challenging, but doable with the help of helper functions.
+    \item Step five was alright, as it was simply the matter of sending a cookie.
+    \item Step six was the most difficult part of this project.
+    \begin{itemize}
+        \item this was where we had to actually look up the cookie value, and return the correct page if it was correct.
+        \item The hardest part was refactoring the script such that, if the cookie is found, we'd skip rendering the login page. 
+        \item It took both of us to implement it ,but we got it working. 
+    \end{itemize}
+    \item step 7 was nice and straight forward.
+\end{itemize}
+
+\section{Reflection}
+
+This assignment was certainly difficult, but we learn quite a lot:
+\begin{itemize}
+    \item We learned how http works at the TCP level. Specifically, what the header cointains, how what happens behind the scenes when we load a webpage
+    \item We also learned about cookies, and how they work. Essentially, Cookies serve as a sort of save state for a webpage, and the server is responsible for reading the cookie, and returning the correct data to the client.
+\end{itemize}
+\end{document}
